@@ -11,11 +11,84 @@ library(stringr)
 
 # Load Excel dataset
 
-file <- "C:/Users/IQBAL ABID/Documents/Easy Promts with Std.xlsx"
+file <- "C:/Users/IQBAL ABID/Documents/Easy_Prompts_Combined.xlsx"
 df <- read_excel(path = file, sheet = 1)
 
 
-# Overall heat maps
+# Some exploratory analysis and consistency checks
+
+# 1) data prep (numeric + factors)
+dat <- df %>%
+  mutate(
+    # numeric
+    Score       = as.numeric(Score),
+    ActualScore = as.numeric(ActualScore),
+    Bias        = as.numeric(Bias),
+    Bias_std    = as.numeric(Bias_std),
+    ScaleMax    = as.numeric(ScaleMax),
+    # tidy strings -> factors
+    Disorder = factor(as.character(Disorder), levels = c("MDD","GAD","PTSD")),
+    Model    = factor(str_to_lower(str_trim(as.character(Model))),
+                      levels = c("gemini","chatgpt","replika")),
+    Severity = factor(str_to_title(str_trim(as.character(Severity))),
+                      levels = c("Mild","Moderate","Severe"))
+  )
+
+# 2) Boxplots
+# 2a) Bias by Severity within Disorder
+p_box_sev_dis <- ggplot(dat, aes(x = Severity, y = Bias)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+  facet_wrap(~ Disorder, nrow = 1) +
+  labs(title = "Bias by Severity within Disorder",
+       x = "Severity", y = "Bias (Score − ActualScore)")
+
+# 2b) Bias by Severity, faceted by Disorder & Model
+p_box_sev_dis_mod <- ggplot(dat, aes(x = Severity, y = Bias)) +
+  geom_boxplot(outlier.alpha = 0.5) +
+  facet_grid(Disorder ~ Model) +
+  labs(title = "Bias by Severity, Faceted by Disorder & Model",
+       x = "Severity", y = "Bias (Score − ActualScore)")
+
+# Print (comment out if you don't want them to render immediately)
+print(p_box_sev_dis)
+print(p_box_sev_dis_mod)
+
+# 3) Range & consistency checks
+cat("\n=== Overall numeric summaries ===\n")
+print(summary(dplyr::select(dat, Score, ActualScore, Bias, Bias_std, ScaleMax)))
+
+cat("\n=== Per-disorder ranges ===\n")
+print(
+  dat %>%
+    group_by(Disorder) %>%
+    summarise(
+      score_min  = min(Score, na.rm = TRUE),
+      score_max  = max(Score, na.rm = TRUE),
+      actual_min = min(ActualScore, na.rm = TRUE),
+      actual_max = max(ActualScore, na.rm = TRUE),
+      bias_min   = min(Bias, na.rm = TRUE),
+      bias_max   = max(Bias, na.rm = TRUE),
+      biasstd_min= min(Bias_std, na.rm = TRUE),
+      biasstd_max= max(Bias_std, na.rm = TRUE),
+      scale_max  = first(ScaleMax),
+      .groups = "drop"
+    )
+)
+
+# Bias_std consistency: Bias_std ≈ Bias / ScaleMax
+eps <- 1e-9  # tolerance for floating-point
+bias_check <- dat %>%
+  mutate(Bias_std_recalc = Bias / ScaleMax,
+         delta = abs(Bias_std_recalc - Bias_std)) %>%
+  summarise(max_delta = max(delta, na.rm = TRUE),
+            n_over    = sum(delta > eps, na.rm = TRUE))
+
+cat("\n=== Bias_std consistency check ===\n")
+print(bias_check)  # expect max_delta near 0 and n_over = 0
+
+
+
+# Overall bias heat maps
 
 # Heatmaps (Severe only): WITH and WITHOUT standardization
 #   - WITH  = mean absolute |Bias_std|
@@ -925,4 +998,5 @@ all_long <- all_long %>%
 # 6) Final sanity check
 
 str(all_long)
+
 
