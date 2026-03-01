@@ -28,13 +28,7 @@ across three disorders:
 This repository contains data preparation and prompt generation scripts, analysis code, and figures from our study. We evaluate model behavior under two prompt settings:
 
 *   **Low‑Complexity (numeric scoring):** Models output a severity score. We analyze Bias (Score − ActualScore) and Standardized Bias (Bias_std).
-*   **High‑Complexity (long‑form responses):** 
-We compute bias from human‑rated scores (1–5) using:
-
-$$
-\text{Bias} = 5 - \text{Average Across Categories}
-$$
-Where 5 is the maximum possible average.
+*   **High‑Complexity (long‑form responses):** We compute bias from human‑rated scores (1–5) using: Bias = 5 - Average Across Categories. Where 5 is the maximum possible average.
 
 ### **Dataset**
 
