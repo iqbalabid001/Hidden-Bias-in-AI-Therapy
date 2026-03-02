@@ -1,0 +1,139 @@
+function createNamedRaterSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // Configuration: Assign specific people to specific conditions
+  var assignments = [
+    { 
+      source: "PTSDMasterList", 
+      baseName: "PTSD", 
+      rater1: "Zhypar", 
+      rater2: "Saliqa" 
+    },
+    { 
+      source: "MDDMasterList", 
+      baseName: "MDD", 
+      rater1: "Asini", 
+      rater2: "Farzona" 
+    },
+    { 
+      source: "GADMasterList", 
+      baseName: "GAD", 
+      rater1: "Iqbal", 
+      rater2: "Karim" 
+    }
+  ];
+
+  // Headers (Using Actionability as per your last snippet)
+  var evalHeaders = [
+    "Demographics", "Severity", "Prompt", "LLM Model", "LLM Response", 
+    "Safety (1-5)", "Empathy (1-5)", "Advice Quality (1-5)", "Actionability (1=None, 5=High)", "Dialect (1-5)", "Comments"
+  ];
+
+  assignments.forEach(function(item) {
+    // Create Sheet for First Rater (Blue Color Scheme)
+    var sheetName1 = item.baseName + "_Evaluation_" + item.rater1;
+    processSingleEvalSheet(ss, item.source, sheetName1, evalHeaders, "#cfe2f3", "#6fa8dc");
+    
+    // Create Sheet for Second Rater (Orange Color Scheme)
+    var sheetName2 = item.baseName + "_Evaluation_" + item.rater2;
+    processSingleEvalSheet(ss, item.source, sheetName2, evalHeaders, "#fce5cd", "#f9cb9c");
+  });
+  
+  SpreadsheetApp.getUi().alert("Success! Created 6 evaluation sheets named for your team.");
+}
+
+function processSingleEvalSheet(ss, sourceName, targetName, evalHeaders, bodyColor, headerColor) {
+  var sourceSheet = ss.getSheetByName(sourceName);
+  if (!sourceSheet) return; 
+
+  var targetSheet = ss.getSheetByName(targetName);
+  if (!targetSheet) {
+    targetSheet = ss.insertSheet(targetName);
+  } else {
+    targetSheet.clear();
+  }
+
+  var data = sourceSheet.getDataRange().getValues();
+  if (data.length < 2) return;
+
+  var headers = data[0].map(function(h) { return String(h).toLowerCase().trim(); });
+  
+  // --- COLUMN MATCHING ---
+  var idxPrompt = headers.indexOf("final prompt");
+  var idxAge = headers.indexOf("age");
+  var idxGender = headers.indexOf("gender");
+  var idxRace = headers.indexOf("race");
+  var idxWealth = headers.indexOf("economic status");
+  
+  // Logic for Severity (Handles "sevierity" typo or correct "severity")
+  var idxSeverity = headers.indexOf("sevierity");
+  if (idxSeverity === -1) idxSeverity = headers.indexOf("severity"); 
+
+  var sheetRows = [];
+  var models = ["Gemini", "ChatGPT", "Replika", "Wysa"];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var prompt = (idxPrompt > -1) ? row[idxPrompt] : "N/A";
+    var demo = row[idxAge] + "/" + row[idxGender] + "/" + row[idxRace] + "/" + row[idxWealth];
+    var severity = (idxSeverity > -1) ? row[idxSeverity] : "N/A";
+
+    models.forEach(function(model) {
+      var colIndex = headers.indexOf("response on " + model.toLowerCase());
+      
+      if (colIndex > -1) {
+        var responseText = row[colIndex];
+        
+        if (responseText && responseText !== "" && responseText !== false) {
+          sheetRows.push([
+            demo,
+            severity,     
+            prompt,       
+            model,        
+            responseText, 
+            "", "", "", "", "", "" // Empty slots for rating
+          ]);
+        }
+      }
+    });
+  }
+
+  if (sheetRows.length > 0) {
+    targetSheet.getRange(1, 1, 1, evalHeaders.length).setValues([evalHeaders]);
+    targetSheet.getRange(2, 1, sheetRows.length, sheetRows[0].length).setValues(sheetRows);
+
+    // Apply Validation and Styling
+    applyValidationAndStyle(targetSheet, sheetRows.length, bodyColor, headerColor);
+  }
+}
+
+function applyValidationAndStyle(sheet, numRows, bodyColor, headerColor) {
+  var rule1to5 = SpreadsheetApp.newDataValidation()
+    .requireValueInList(["1", "2", "3", "4", "5"], true)
+    .setAllowInvalid(false)
+    .build();
+
+  // Apply Dropdowns to Columns 6, 7, 8, 9, 10
+  sheet.getRange(2, 6, numRows, 5).setDataValidation(rule1to5);
+
+  // --- VISUAL STYLING ---
+  var lastCol = 11;
+
+  // Header Style
+  sheet.getRange(1, 1, 1, lastCol).setFontWeight("bold").setBorder(true, true, true, true, true, true);
+  
+  // Color Code the Rater Section (Cols 6-11)
+  sheet.getRange(1, 6, numRows + 1, 6).setBackground(bodyColor); 
+  sheet.getRange(1, 6, 1, 6).setBackground(headerColor); 
+
+  // Widths
+  sheet.setColumnWidth(3, 300); // Prompt
+  sheet.setColumnWidth(5, 400); // Response
+  
+  // Freeze
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(5); 
+  
+  // Text Wrap for Comments
+  sheet.getRange(2, 11, numRows, 1).setWrap(true);
+}
